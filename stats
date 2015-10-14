@@ -1,0 +1,185 @@
+#!/bin/bash
+
+rows=$1 # gets first cmd line arg as tentative -r or -c flag
+filename=$2 # gets second cmd line arg as tentative filename
+
+# if the first two chars of arg1 are not equal to -c or -r and there are more
+# than two args, throw an error
+if [[ !(${1:0:2} == "-r" || ${1:0:2} == "-c") || $# -gt 2 ]]; then
+  # print usage error redirected to the error
+  echo "Usage: stats {-rows|-cols} [file]">&2
+  # exit with code 1
+  exit 1
+fi
+
+# if the filename var is not null check the filename
+if [ $filename ]; then
+  # if the file does not exist, throw an error
+  if [[ !(-r "$filename") ]]; then
+    # print file read error redirected to the error
+    echo "./stats: cannot read $filename">&2
+    # exit with code 1
+    exit 1
+  fi
+fi
+
+# function for calculating the average of nums in array
+function average(){
+  # init sum to be 0
+  sum=0
+  # set var array equal to first var passed into function
+  array=$1
+
+  # iterate over elements in array
+  for i in ${array[@]}; do
+    # add each element to the sum
+    sum=`expr $i + $sum`
+  done
+  # perform integer devide to get tentative avg of values
+  average=`expr $sum / ${#array[@]}`
+  # the next 6 lines of code check if rounding is correct, or fixes it
+  # sets the remainder equal to the sum modded by the len of array
+  remain=`expr $sum % ${#array[@]}`
+  # multiplies remainder by 10 so we don't have to deal with floats
+  remain=$(($remain * 10))
+  # devides the remainder by the len of array
+  remain=`expr $remain / ${#array[@]}`
+  # if remain is 5, then the remainder would have been 0.5, so we want to round
+  # up any time remain is >= 5
+  # so if remain >= 5, add 1 to the avg
+  if [[ $remain > 5 || $remain == 5 ]]; then
+    average=`expr $average + 1`
+  fi
+}
+
+# function for calculating the median number in an array
+function median(){
+  # pipes each var passed to the function w a newline char to the sort function
+  # sort function performs a numerical sort and stores in array called sorted
+  sorted=($(printf '%s\n' "$@"|sort -n))
+  # the median occurs at half the length of the array
+  median=${sorted[`expr ${#sorted[@]} / 2`]}
+}
+
+# function for fixing the array with the -c for passing to avg function
+function fixarrforavg(){
+  # takes all vars passed to function and prints them to one array
+  array=($(printf '%s ' "$@"))
+}
+
+# inits array to empty set
+array=()
+# if filename is defined, then read from the file
+if [ -n "$2" ]; then
+  # if the flag given is -r, avg and median of rows
+  if [ ${1:0:2} == "-r" ]; then
+    # prints table header
+    echo "Average Median"
+    # iterates over each line in file
+    while read -r line; do
+      # reads each char from line to array
+      read -a array <<< $line
+      # calls average function on array
+      average ${array[@]}
+      # calls median function on array
+      median ${array[@]}
+      # prints the results from each function
+      echo -e "$average\t$median"
+    # reads in from ./filename
+    done < "$filename"
+  # if the flag given is -c, avg and median of cols
+  elif [ ${1:0:2} == "-c" ]; then
+    # create dir call BASHDIR for temp files
+    mkdir -p BASHDIR
+    # inits colavg to empty string for printing out final avgs
+    colavg=""
+    # inits colmed to empty string for printing out final meds
+    colmed=""
+    # read each line in file
+    while read -r line; do
+      # read each char in line into an array
+      read -a array <<< $line
+      # iterate over each char in each array with index and put to file
+      for i in ${!array[@]}; do
+        # put each element in array into the file of that index
+        printf "%d " ${array[$i]} >> ./BASHDIR/$i
+      done
+    # gets inputs from filename
+    done < "$filename"
+    # if there are more than one file in the temp dir, calculate the stats
+    if [ $i > 0 ]; then
+      # set FILES to the path of the temp files
+      FILES=./BASHDIR/*
+      # iterate over the files in the temp dir
+      for i in $FILES; do
+        # init arr to empty set
+        arr=()
+        # read arr from the file
+        arr=( $(cat $i) )
+        # fix the array so that it will work in average function
+        fixarrforavg ${arr[@]}
+        # calculate the average of that col
+        average ${array[@]}
+        # calculate the median of that col
+        median ${arr[@]}
+        # add the average to the string of results
+        colavg+=$average
+        # add a tab to the string of results for formatting
+        colavg+="\t"
+        # add the median to the string of results
+        colmed+=$median
+        # add a tab to the string of results
+        colmed+="\t"
+      done
+      # print out averges header
+      echo "Averages:"
+      # print out list of averages
+      echo -e $colavg
+      # print out medians header
+      echo "Medians:"
+      #print out list of medians
+      echo -e $colmed
+    fi
+    # clean up temp files and dir
+    rm -rf BASHDIR
+  fi
+# if there was not a file specified, do the same as above but reading from stdin
+elif [ -z "$2" ]; then
+  if [ ${1:0:2} == "-r" ]; then
+    echo "Average Median"
+    while read -r line; do
+      read -a array <<< $line
+      average ${array[@]}
+      median ${array[@]}
+      echo -e "$average\t$median"
+    done
+  elif [ ${1:0:2} == "-c" ]; then
+    mkdir -p BASHDIR
+    colavg=""
+    colmed=""
+    while read -r line; do
+      read -a array <<< $line
+      for i in ${!array[@]}; do
+        printf "%d " ${array[$i]} >> ./BASHDIR/$i
+      done
+    done
+    FILES=./BASHDIR/*
+    for i in $FILES; do
+      arr=()
+      arr=( $(cat $i) )
+      fixarrforavg ${arr[@]}
+      average ${array[@]}
+      median ${arr[@]}
+      colavg+=$average
+      colavg+="\t"
+      colmed+=$median
+      colmed+="\t"
+    done
+    echo "Averages:"
+    echo -e $colavg
+    echo "Medians:"
+    echo -e $colmed
+    rm -rf BASHDIR
+  fi
+fi
+
