@@ -150,7 +150,7 @@ if [ -n "$2" ]; then
     # gets inputs from filename
     done < "$filename"
     # if there are more than one file in the temp dir, calculate the stats
-    if [[ $i && $i -gt 0 ]]; then
+    if [[ $i ]]; then
       processcols
     fi
     # clean up temp files and dir
@@ -173,7 +173,7 @@ elif [ -z "$2" ]; then
     done
 
     # if there are more than one file in the temp dir, calculate the stats
-    if [ $i -gt 0 ]; then
+    if [ $i ]; then
       processcols
     fi
     rm -rf BASHDIR
